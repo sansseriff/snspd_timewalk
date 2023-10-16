@@ -3,4 +3,4 @@
 Using bokeh.js for plotting
 
 <!-- image -->
-![time walk](./visual.png)
+![time walk](https://github.com/sansseriff/snspd_timewalk/blob/master/visual.PNG)
