@@ -1,4 +1,4 @@
-# Visualize time walk and pilup effects in snspds
+# Visualize time walk and pileup effects in snspds
 
 Using bokeh.js for plotting
 
