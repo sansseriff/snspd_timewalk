@@ -145,12 +145,6 @@
       }
     );
 
-    // let rect_data = new Bokeh.ColumnDataSource({
-    //   data: {
-    //     x: 0,
-    //     y: 100,
-    //   },
-    // });
 
     const rectangle = scope.rect({
       x: 0,
