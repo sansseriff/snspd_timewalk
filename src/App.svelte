@@ -16,9 +16,10 @@
   }
 
   interface WaveformData {
-    sliding_pulse: number[];
-    existing_waveform: number[];
-    current_waveform: number[];
+    sliding_pulse_1: Array<number>;
+    sliding_pulse_2: Array<number>;
+    existing_waveform: Array<number>;
+    current_waveform: Array<number>;
   }
 
   let jsonData;
@@ -42,7 +43,7 @@
     return arr;
   }
 
-  loadJsonData();
+  // loadJsonData();
 
   onMount(async () => {
     const jsonData = await loadJsonData();
@@ -51,24 +52,56 @@
 
   var scope = null;
   var scope_inset = null;
+  let slider_1: HTMLInputElement;
+  let slider_2: HTMLInputElement;
+  let output_1: HTMLElement;
+  let output_2: HTMLElement;
+  let waveformData: WaveformData;
+  let data: any;
+  
+  
 
-  function update_graph(waveformData: WaveformData, idx: number) {
+  function update_graph(waveformData: WaveformData, idx_1: number, idx_2: number): [WaveformData, Array<number>, Array<number>] {
+    let sliding_pulse_1 = waveformData.sliding_pulse_1.slice();
+    let sliding_pulse_2 = waveformData.sliding_pulse_2.slice();
     for (let i = 0; i < waveformData.existing_waveform.length; i++) {
-      if (i - idx < 0 || i - idx > waveformData.sliding_pulse.length) {
+      if (i - idx_1 - idx_2 < 0 || i - idx_1 - idx_2 > waveformData.sliding_pulse_1.length) {
         waveformData.current_waveform[i] = waveformData.existing_waveform[i];
       } else {
         waveformData.current_waveform[i] =
           waveformData.existing_waveform[i] +
-          waveformData.sliding_pulse[i - idx];
+          waveformData.sliding_pulse_1[i - idx_1] + waveformData.sliding_pulse_2[i - idx_2];
+
+        sliding_pulse_1[i] = waveformData.sliding_pulse_1[i - idx_1];
+        sliding_pulse_2[i] = waveformData.sliding_pulse_2[i - idx_2] + waveformData.sliding_pulse_1[i - idx_1];
       }
     }
 
-    return waveformData;
+    return [waveformData, sliding_pulse_1, sliding_pulse_2]
+  }
+
+
+  function handle_sliders() {
+    
+    output_1.innerHTML = slider_1.value
+    output_2.innerHTML = slider_2.value;
+
+    var idx_1 = Math.round(parseFloat(slider_1.value));
+    var idx_2 = Math.round(parseFloat(slider_2.value));
+    let sliding_pulse_1: Array<number>;
+    let sliding_pulse_2: Array<number>;
+    [waveformData, sliding_pulse_1, sliding_pulse_2] = update_graph(waveformData, idx_1, idx_2);
+
+    data.data.y = waveformData.current_waveform;
+    data.data.y_sliding_1 = sliding_pulse_1;
+    data.data.y_sliding_2 = sliding_pulse_2;
+    data.change.emit();
   }
 
   function make_graph(json_data: JsonData) {
-    let waveformData: WaveformData = {
-      sliding_pulse: json_data.y.slice(),
+    waveformData = {
+      sliding_pulse_1: json_data.y.slice(),
+      sliding_pulse_2: json_data.y.slice(),
       existing_waveform: json_data.y.slice(),
       current_waveform: json_data.y.slice(),
     };
@@ -81,10 +114,13 @@
     );
     waveformData.existing_waveform.unshift(...pulse_offset);
 
-    let data = new Bokeh.ColumnDataSource({
+    data = new Bokeh.ColumnDataSource({
       data: {
         x: json_data.x.map((value) => value - 3200 + 84),
         y: waveformData.current_waveform,
+        y_stationary: waveformData.existing_waveform,
+        y_sliding_1: waveformData.sliding_pulse_1,
+        y_sliding_2: waveformData.sliding_pulse_2,
       },
     });
 
@@ -125,15 +161,41 @@
 
     // scope.add_tools(custom_hover);
 
+    
+
+    const band_1 = new Bokeh.Band({
+      base: { field: "x" },
+      lower: 0,
+      upper: { field: "y_sliding_2" },
+      source: data,
+      fill_alpha: 0.3,
+      line_alpha: 0,
+      fill_color: "#f28c63"
+    })
+
+    const band_2 = new Bokeh.Band({
+      base: { field: "x" },
+      lower: { field: "y_sliding_2" },
+      upper: { field: "y_sliding_1" },
+      source: data,
+      fill_alpha: 0.2,
+      line_alpha: 0,
+      fill_color: "#f542b0"
+    })
+
     const line_1 = scope.line(
       { field: "x" },
       { field: "y" },
       {
         source: data,
-        line_width: 3,
-        line_color: "#5185c2",
+        line_width: 4,
+        line_color: "#000000",
       }
     );
+
+
+    scope.add_layout(band_1);
+    scope.add_layout(band_2);
 
     const line_inset = scope_inset.line(
       { field: "x" },
@@ -141,7 +203,7 @@
       {
         source: data,
         line_width: 3,
-        line_color: "#5185c2",
+        line_color: "#000000",
       }
     );
 
@@ -168,7 +230,10 @@
       end: new Bokeh.NormalHead({line_color:"red", fill_color: "red", size: 15}),
     });
 
+    
+
     scope_inset.add_layout(arrow);
+    
 
     const doc = new Bokeh.Document();
     doc.add_root(scope);
@@ -177,11 +242,15 @@
     Bokeh.embed.add_document_standalone(doc, document.getElementById("plot"));
     // Bokeh.embed.add_document_standalone(doc_inset, document.getElementById("plot-inset"));
 
-    var slider = document.getElementById("myRange");
-    var output = document.getElementById("demo");
-    output.innerHTML = slider.value; // Display the default slider value
 
-    update_graph(waveformData, 0);
+    slider_1 = document.getElementById("myRange_1");
+    slider_2 = document.getElementById("myRange_2");
+    output_1 = document.getElementById("value_1");
+    output_2 = document.getElementById("value_2");
+    output_1.innerHTML = slider_1.value; // Display the default slider value
+    output_2.innerHTML = slider_2.value; // Display the default slider value
+
+    update_graph(waveformData, 0, 0);
     
 
     setTimeout(() => {
@@ -199,15 +268,11 @@
 
 
     // Update the current slider value (each time you drag the slider handle)
-    slider.oninput = function () {
-      output.innerHTML = this.value;
+    slider_1.oninput = handle_sliders;
+    slider_2.oninput = handle_sliders;
+  };
 
-      var idx = Math.round(this.value);
-      waveformData = update_graph(waveformData, idx);
-      data.data.y = waveformData.current_waveform;
-      data.change.emit();
-    };
-  }
+    
 </script>
 
 
@@ -221,10 +286,22 @@
       max="2000"
       value="0"
       class="slider"
-      id="myRange"
+      id="myRange_1"
     />
   </div>
-  <div id="demo" />
+  <div id="value_1" class="output"/>
+
+  <div class="slidecontainer">
+    <input
+      type="range"
+      min="1"
+      max="2000"
+      value="0"
+      class="slider"
+      id="myRange_2"
+    />
+  </div>
+  <div id="value_2" class="output"/>
 </div>
 
 <style>
@@ -259,11 +336,12 @@
     appearance: none;
     width: 100%; /* Full-width */
     height: 25px; /* Specified height */
-    background: #d3d3d3; /* Grey background */
+    background: #e5e5e5; /* Grey background */
     outline: none; /* Remove outline */
     opacity: 0.7; /* Set transparency (for mouse-over effects on hover) */
     -webkit-transition: 0.2s; /* 0.2 seconds transition on hover */
     transition: opacity 0.2s;
+    border-radius: 0.3rem;
   }
 
   /* Mouse-over effects */
@@ -277,8 +355,9 @@
     appearance: none;
     width: 25px; /* Set a specific slider handle width */
     height: 25px; /* Slider handle height */
-    background: #04aa6d; /* Green background */
+    background: #9a9a9a; /* Green background */
     cursor: pointer; /* Cursor on hover */
+    border-radius: 0.3rem;
   }
 
   .slider::-moz-range-thumb {
@@ -286,5 +365,11 @@
     height: 25px; /* Slider handle height */
     background: #04aa6d; /* Green background */
     cursor: pointer; /* Cursor on hover */
+  }
+
+  .output {
+    /* font style */
+    font-family: "Roboto", sans-serif;
+    font-weight: bold;
   }
 </style>
