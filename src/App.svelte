@@ -25,7 +25,7 @@
   let jsonData;
 
   async function loadJsonData(): Promise<JsonData> {
-    const response = await fetch("./assets/peacoq_pulse_extended.json");
+    const response = await fetch("/peacoq_pulse_extended.json");
     return await response.json();
   }
 
